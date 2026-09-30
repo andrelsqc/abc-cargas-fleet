@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: abc-cargas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: abc_cargas
+      POSTGRES_USER: abc
+      POSTGRES_PASSWORD: abc
+    ports:
+      - "5432:5432"
+    volumes:
+      - abc_cargas_pgdata:/var/lib/postgresql/data
+
+volumes:
+  abc_cargas_pgdata:
