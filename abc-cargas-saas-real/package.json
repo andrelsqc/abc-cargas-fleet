@@ -1,14 +1,15 @@
 {
   "name": "abc-cargas-saas-real",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "ABC Cargas fleet SaaS - pixel-first dashboard with PostgreSQL and authentication",
+  "description": "Gestão de frota leve, pátios, ciclo de vida e autenticação PostgreSQL",
   "type": "module",
   "scripts": {
     "dev": "node --watch server/index.js",
     "start": "node server/index.js",
     "db:migrate": "node server/migrate.js",
-    "db:seed": "node server/seed.js"
+    "db:seed": "node server/seed.js",
+    "test": "node --test tests/metrics.test.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

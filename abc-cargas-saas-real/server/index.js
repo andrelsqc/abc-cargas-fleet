@@ -7,6 +7,8 @@ import bcrypt from 'bcryptjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool, tx } from './db.js';
+import {CATALOG,DEFAULT_POLICY} from './catalog.js';
+import {validateState,InputError} from './validation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -16,7 +18,7 @@ const isProd = process.env.NODE_ENV === 'production';
 const COOKIE = 'abc_session';
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '12mb' }));
 app.use(cookieParser());
 
 function issueSession(res, user){
@@ -50,42 +52,68 @@ app.post('/api/auth/login', async (req,res)=>{
 app.post('/api/auth/logout',(req,res)=>{res.clearCookie(COOKIE,{httpOnly:true,sameSite:'lax',secure:isProd,path:'/'});res.json({ok:true});});
 app.get('/api/auth/me',auth,async(req,res)=>{res.json({user:{id:req.user.sub,name:req.user.name,email:req.user.email,role:req.user.role,organizationId:req.user.org}})});
 
-async function loadState(orgId){
-  const [v,d,m,f,n,s]=await Promise.all([
-    pool.query(`SELECT code id,plate,model,status,km,driver,to_char(next_maintenance,'YYYY-MM-DD') "nextMaintenance",fuel FROM vehicles WHERE organization_id=$1 ORDER BY code`,[orgId]),
-    pool.query(`SELECT code id,name,license,status FROM drivers WHERE organization_id=$1 ORDER BY name`,[orgId]),
-    pool.query(`SELECT code id,vehicle_code vehicle,type,to_char(service_date,'YYYY-MM-DD') date,status,notes FROM maintenance WHERE organization_id=$1 ORDER BY service_date DESC`,[orgId]),
-    pool.query(`SELECT code id,vehicle_code vehicle,to_char(service_date,'YYYY-MM-DD') date,liters,km,driver FROM fuel_records WHERE organization_id=$1 ORDER BY service_date DESC`,[orgId]),
-    pool.query(`SELECT code id,vehicle_code vehicle,title,body text,level,read,to_char(event_date,'YYYY-MM-DD') date FROM notifications WHERE organization_id=$1 ORDER BY event_date DESC`,[orgId]),
-    pool.query(`SELECT company_name company FROM organization_settings WHERE organization_id=$1`,[orgId])
-  ]);
-  return {vehicles:v.rows,drivers:d.rows,maintenance:m.rows,fuel:f.rows,notifications:n.rows,settings:{company:s.rows[0]?.company||'ABC Cargas',user:reqSafeUserName(orgId)}};
-}
-function reqSafeUserName(_orgId){return 'Michele Shibata'}
-app.get('/api/bootstrap',auth,async(req,res)=>{
-  const state=await loadState(req.user.org); state.settings.user=req.user.name; res.json({state,user:{id:req.user.sub,name:req.user.name,email:req.user.email,role:req.user.role}});
-});
 
-function normalizeArray(v){return Array.isArray(v)?v:[];}
+const numFields={vehicles:['km','fuel'],fuel:['liters','km']};
+async function loadState(orgId){
+ return tx(async c=>{
+ await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+ const [v,d,m,f,n,s,y]=await Promise.all([
+  c.query(`SELECT code id,plate,model,status,km,driver,to_char(next_maintenance,'YYYY-MM-DD') "nextMaintenance",fuel,details FROM vehicles WHERE organization_id=$1 ORDER BY plate`,[orgId]),
+  c.query(`SELECT code id,name,license,status FROM drivers WHERE organization_id=$1 ORDER BY name`,[orgId]),
+  c.query(`SELECT code id,vehicle_code vehicle,type,to_char(service_date,'YYYY-MM-DD') date,status,notes,details FROM maintenance WHERE organization_id=$1 ORDER BY service_date DESC`,[orgId]),
+  c.query(`SELECT code id,vehicle_code vehicle,to_char(service_date,'YYYY-MM-DD') date,liters,km,driver,details FROM fuel_records WHERE organization_id=$1 ORDER BY service_date DESC,code`,[orgId]),
+  c.query(`SELECT code id,vehicle_code vehicle,title,body text,level,read,to_char(event_date,'YYYY-MM-DD') date FROM notifications WHERE organization_id=$1 ORDER BY event_date DESC`,[orgId]),
+  c.query(`SELECT company_name company,details,revision FROM organization_settings WHERE organization_id=$1`,[orgId]),
+  c.query(`SELECT code id,name,address FROM yards WHERE organization_id=$1 ORDER BY name`,[orgId])
+ ]);
+ const merge=(rows,key)=>rows.map(row=>{const {details,...base}=row;const item={...(details||{}),...base};for(const field of numFields[key]||[])item[field]=Number(item[field]);return item});
+ return {state:{vehicles:merge(v.rows,'vehicles'),drivers:d.rows,maintenance:merge(m.rows,'maintenance'),fuel:merge(f.rows,'fuel'),notifications:n.rows,yards:y.rows,settings:{policy:DEFAULT_POLICY,catalog:[],...(s.rows[0]?.details||{}),company:s.rows[0]?.company||'ABC Cargas',user:''}},revision:Number(s.rows[0]?.revision||0)};
+ });
+}
+app.get('/api/catalog',auth,(_req,res)=>res.json({catalog:CATALOG}));
+app.get('/api/bootstrap',auth,async(req,res)=>{
+ const result=await loadState(req.user.org);result.state.settings.user=req.user.name;
+ res.json({...result,catalog:CATALOG,user:{id:req.user.sub,name:req.user.name,email:req.user.email,role:req.user.role},schemaVersion:2});
+});
+const vehicleExtras=['brand','bodyType','year','color','yardId','purchaseDate','purchaseKm','purchaseValue','currentValue','residualValue','lifecycleMonths','replacementKm','trackerId','position','image'];
+const picked=(obj,keys)=>Object.fromEntries(keys.filter(k=>obj[k]!==undefined).map(k=>[k,obj[k]]));
+async function upsert(c,table,org,rows,fields,extras=[]){
+ const columns=['organization_id','code',...fields.map(([db])=>db),...(extras.length?['details']:[])];
+ const updates=[...fields.map(([db])=>`${db}=EXCLUDED.${db}`),...(extras.length?['details=EXCLUDED.details']:[]),'updated_at=NOW()'];
+ const sql=`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map((_,i)=>'$'+(i+1)).join(',')}) ON CONFLICT(organization_id,code) DO UPDATE SET ${updates.join(',')}`;
+ for(const row of rows){const values=[org,row.id,...fields.map(([,key,fallback])=>row[key]??fallback),...(extras.length?[JSON.stringify(picked(row,extras))]:[])];await c.query(sql,values);}
+}
+async function removeMissing(c,table,org,rows){await c.query(`DELETE FROM ${table} WHERE organization_id=$1 AND NOT(code=ANY($2::text[]))`,[org,rows.map(x=>x.id)]);}
 app.post('/api/state/sync',auth,role('admin','manager','operator'),async(req,res)=>{
-  const state=req.body?.state;
-  if(!state || !Array.isArray(state.vehicles) || !Array.isArray(state.drivers)) return res.status(400).json({error:'Estado inválido.'});
-  const org=req.user.org;
-  await tx(async c=>{
-    const vehicles=normalizeArray(state.vehicles), drivers=normalizeArray(state.drivers), maint=normalizeArray(state.maintenance), fuel=normalizeArray(state.fuel), notes=normalizeArray(state.notifications);
-    for(const v of vehicles) await c.query(`INSERT INTO vehicles(organization_id,code,plate,model,status,km,driver,next_maintenance,fuel) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(organization_id,code) DO UPDATE SET plate=EXCLUDED.plate,model=EXCLUDED.model,status=EXCLUDED.status,km=EXCLUDED.km,driver=EXCLUDED.driver,next_maintenance=EXCLUDED.next_maintenance,fuel=EXCLUDED.fuel,updated_at=NOW()`,[org,v.id,v.plate,v.model,v.status,Number(v.km||0),v.driver||'—',v.nextMaintenance||null,Number(v.fuel||0)]);
-    const vIds=vehicles.map(v=>v.id); if(vIds.length) await c.query(`DELETE FROM vehicles WHERE organization_id=$1 AND NOT (code = ANY($2::text[]))`,[org,vIds]); else await c.query(`DELETE FROM vehicles WHERE organization_id=$1`,[org]);
-    for(const d of drivers) await c.query(`INSERT INTO drivers(organization_id,code,name,license,status) VALUES($1,$2,$3,$4,$5) ON CONFLICT(organization_id,code) DO UPDATE SET name=EXCLUDED.name,license=EXCLUDED.license,status=EXCLUDED.status,updated_at=NOW()`,[org,d.id,d.name,d.license||'E',d.status]);
-    const dIds=drivers.map(d=>d.id); if(dIds.length) await c.query(`DELETE FROM drivers WHERE organization_id=$1 AND NOT (code = ANY($2::text[]))`,[org,dIds]); else await c.query(`DELETE FROM drivers WHERE organization_id=$1`,[org]);
-    for(const x of maint) await c.query(`INSERT INTO maintenance(organization_id,code,vehicle_code,type,service_date,status,notes) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id,code) DO UPDATE SET vehicle_code=EXCLUDED.vehicle_code,type=EXCLUDED.type,service_date=EXCLUDED.service_date,status=EXCLUDED.status,notes=EXCLUDED.notes,updated_at=NOW()`,[org,x.id,x.vehicle,x.type,x.date,x.status,x.notes||'']);
-    const mIds=maint.map(x=>x.id); if(mIds.length) await c.query(`DELETE FROM maintenance WHERE organization_id=$1 AND NOT (code = ANY($2::text[]))`,[org,mIds]); else await c.query(`DELETE FROM maintenance WHERE organization_id=$1`,[org]);
-    for(const x of fuel) await c.query(`INSERT INTO fuel_records(organization_id,code,vehicle_code,service_date,liters,km,driver) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id,code) DO UPDATE SET vehicle_code=EXCLUDED.vehicle_code,service_date=EXCLUDED.service_date,liters=EXCLUDED.liters,km=EXCLUDED.km,driver=EXCLUDED.driver,updated_at=NOW()`,[org,x.id,x.vehicle,x.date,Number(x.liters||0),Number(x.km||0),x.driver||'—']);
-    const fIds=fuel.map(x=>x.id); if(fIds.length) await c.query(`DELETE FROM fuel_records WHERE organization_id=$1 AND NOT (code = ANY($2::text[]))`,[org,fIds]); else await c.query(`DELETE FROM fuel_records WHERE organization_id=$1`,[org]);
-    for(const x of notes) await c.query(`INSERT INTO notifications(organization_id,code,vehicle_code,title,body,level,read,event_date) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(organization_id,code) DO UPDATE SET vehicle_code=EXCLUDED.vehicle_code,title=EXCLUDED.title,body=EXCLUDED.body,level=EXCLUDED.level,read=EXCLUDED.read,event_date=EXCLUDED.event_date,updated_at=NOW()`,[org,x.id,x.vehicle||null,x.title,x.text||'',x.level||'warn',!!x.read,x.date]);
-    const nIds=notes.map(x=>x.id); if(nIds.length) await c.query(`DELETE FROM notifications WHERE organization_id=$1 AND NOT (code = ANY($2::text[]))`,[org,nIds]); else await c.query(`DELETE FROM notifications WHERE organization_id=$1`,[org]);
-    if(state.settings?.company) await c.query(`INSERT INTO organization_settings(organization_id,company_name) VALUES($1,$2) ON CONFLICT(organization_id) DO UPDATE SET company_name=EXCLUDED.company_name,updated_at=NOW()`,[org,state.settings.company]);
-  });
-  res.json({ok:true});
+ const state=validateState(req.body?.state), revision=req.body?.revision;
+ if(!Number.isInteger(revision)||revision<0)throw new InputError('Atualize a página para carregar a nova versão do sistema.',409);
+ const org=req.user.org;
+ await tx(async c=>{
+  const lock=await c.query('SELECT revision FROM organization_settings WHERE organization_id=$1 FOR UPDATE',[org]);
+  if(Number(lock.rows[0]?.revision)!==revision)throw new InputError('Outra sessão atualizou os dados. Recarregue a página antes de salvar.',409);
+  await upsert(c,'yards',org,state.yards,[['name','name'],['address','address','']]);
+  await upsert(c,'vehicles',org,state.vehicles,[['plate','plate'],['model','model'],['status','status'],['km','km',0],['driver','driver','—'],['next_maintenance','nextMaintenance',null],['fuel','fuel',0]],vehicleExtras);
+  await upsert(c,'drivers',org,state.drivers,[['name','name'],['license','license','B'],['status','status']]);
+  await upsert(c,'maintenance',org,state.maintenance,[['vehicle_code','vehicle'],['type','type'],['service_date','date'],['status','status'],['notes','notes','']],['cost','downtimeDays']);
+  await upsert(c,'fuel_records',org,state.fuel,[['vehicle_code','vehicle'],['service_date','date'],['liters','liters'],['km','km',0],['driver','driver','—']],['cost','fullTank']);
+  await upsert(c,'notifications',org,state.notifications,[['vehicle_code','vehicle',null],['title','title'],['body','text',''],['level','level','warn'],['read','read',false],['event_date','date']]);
+  for(const [table,rows] of [['notifications',state.notifications],['fuel_records',state.fuel],['maintenance',state.maintenance],['vehicles',state.vehicles],['drivers',state.drivers],['yards',state.yards]])await removeMissing(c,table,org,rows);
+  await c.query('UPDATE organization_settings SET company_name=$2,details=$3,revision=revision+1,updated_at=NOW() WHERE organization_id=$1',[org,state.settings.company,JSON.stringify(picked(state.settings,['policy','catalog','dismissedAlerts']))]);
+ });
+ res.json({ok:true,revision:revision+1});
+});
+// Manual last-position entry now. Provider adapters can later call an authenticated integration path.
+app.post('/api/vehicles/:id/position',auth,role('admin','manager','operator'),async(req,res)=>{
+ const lat=Number(req.body?.lat),lng=Number(req.body?.lng),at=req.body?.at||new Date().toISOString();
+ if(typeof req.body?.lat!=='number'||typeof req.body?.lng!=='number'||!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lng)||Math.abs(lng)>180||Number.isNaN(Date.parse(at)))throw new InputError('Coordenadas ou horário inválidos.');
+ let revision;
+ await tx(async c=>{
+  await c.query('SELECT revision FROM organization_settings WHERE organization_id=$1 FOR UPDATE',[req.user.org]);
+  const result=await c.query(`UPDATE vehicles SET details=jsonb_set(details,'{position}',$3::jsonb),updated_at=NOW() WHERE organization_id=$1 AND code=$2`,[req.user.org,req.params.id,JSON.stringify({lat,lng,at,source:'manual'})]);
+  if(!result.rowCount)throw new InputError('Veículo não encontrado.',404);
+  revision=Number((await c.query('UPDATE organization_settings SET revision=revision+1 WHERE organization_id=$1 RETURNING revision',[req.user.org])).rows[0].revision);
+ });
+ res.json({ok:true,revision});
 });
 
 app.post('/api/users',auth,role('admin'),async(req,res)=>{
@@ -98,8 +126,8 @@ app.post('/api/users',auth,role('admin'),async(req,res)=>{
 });
 app.get('/api/users',auth,role('admin','manager'),async(req,res)=>{const {rows}=await pool.query(`SELECT id,name,email,role,active,created_at FROM users WHERE organization_id=$1 ORDER BY name`,[req.user.org]);res.json({users:rows});});
 
-app.use(express.static(path.join(__dirname,'../public')));
+app.use(express.static(path.join(__dirname,'../public'),{setHeaders(res,file){if(file.endsWith('.html'))res.set('Cache-Control','no-cache')}}));
 app.use((req,res)=>{ if(req.method==='GET' && req.accepts('html')) return res.sendFile(path.join(__dirname,'../public/index.html')); res.status(404).json({error:'Rota não encontrada'}); });
 
-app.use((err,_req,res,_next)=>{console.error(err);res.status(500).json({error:'Erro interno do servidor.'});});
+app.use((err,_req,res,_next)=>{if(err instanceof InputError)return res.status(err.status).json({error:err.message});if(err.code==='23505')return res.status(409).json({error:'Placa ou registro já cadastrado.'});if(err.type==='entity.too.large')return res.status(413).json({error:'Dados muito grandes. Reduza as imagens.'});console.error(err);res.status(500).json({error:'Não foi possível concluir a operação. Tente novamente.'});});
 app.listen(PORT,()=>console.log(`ABC Cargas SaaS: http://localhost:${PORT}`));

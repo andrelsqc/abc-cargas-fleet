@@ -1,67 +1,13 @@
-# ABC Cargas SaaS — Arquitetura Real v1.1
+# ABC Cargas — frota leve v2
 
-Aplicação web do ABC Cargas com dashboard **Pixel First**, backend Node.js/Express, PostgreSQL, autenticação por sessão HTTP-only e isolamento multiempresa.
+Aplicação Node.js/Express e PostgreSQL com autenticação, pátios, catálogo de veículos leves e indicadores de ciclo de vida.
 
-## IMPORTANTE: como abrir o sistema
+Para atualizar a hospedagem pelo navegador, leia **ATUALIZAR_PELO_NAVEGADOR.md**. Não é necessário instalar programas no computador do usuário. Abra o endereço publicado, e não o HTML com duplo clique.
 
-**Não abra `public/index.html` com duplo clique.** Isso executa o navegador em `file://` e o navegador não consegue acessar a API do backend, causando `Failed to fetch`.
+Na hospedagem, mantenha as variáveis DATABASE_URL, JWT_SECRET, NODE_ENV=production e SEED_PASSWORD. Comando inicial: `npm run db:migrate && npm run db:seed && npm start`.
 
-No Windows, com **Node.js 20+** e **Docker Desktop** instalados:
+Desenvolvimento local opcional: Node.js 20+, PostgreSQL disponível, `npm install`, configurar `.env`, executar a migração e iniciar o servidor. Os scripts Windows e Docker são apenas alternativas para desenvolvimento local.
 
-1. Execute `INICIAR_ABC_CARGAS.bat`.
-2. O script instala as dependências, sobe o PostgreSQL, cria o banco, insere os dados de demonstração e inicia o backend.
-3. O navegador será aberto em:
+`npm test` verifica métricas e validação.
 
-`http://localhost:3000`
-
-Alternativamente, no PowerShell:
-
-```powershell
-.\INICIAR_ABC_CARGAS.ps1
-```
-
-## Execução manual
-
-```powershell
-Copy-Item .env.example .env
-npm install
-docker compose up -d postgres
-npm run db:migrate
-npm run db:seed
-npm start
-```
-
-Depois acesse `http://localhost:3000`.
-
-## Usuário inicial de demonstração
-
-- E-mail: `michele@abccargas.local`
-- Senha: `ABC@123456`
-
-Troque a senha antes de qualquer uso real.
-
-## Arquitetura
-
-- `public/index.html` — interface Pixel First e integração com a API.
-- `server/index.js` — servidor web, autenticação e API.
-- `server/db.js` — conexão PostgreSQL.
-- `server/migrate.js` — criação do schema.
-- `server/seed.js` — empresa, usuário e dados de demonstração.
-- `db/schema.sql` — banco relacional.
-- `docker-compose.yml` — PostgreSQL local.
-- `INICIAR_ABC_CARGAS.bat` — inicialização simplificada no Windows.
-
-## API principal
-
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
-- `GET /api/bootstrap`
-- `POST /api/state/sync`
-- `GET /api/users`
-- `POST /api/users`
-- `GET /api/health`
-
-## Observação
-
-O login usa cookie HTTP-only e o dashboard é servido pelo próprio Express. Assim, front-end e API usam a mesma origem (`http://localhost:3000`), evitando o problema de CORS e de `file://`.
+A conexão automática com o rastreador exige uma implementação específica para o fornecedor. O mapa atual exibe a última posição manual claramente identificada. As estimativas de depreciação são gerenciais e os limites de renovação são editáveis.
