@@ -1,4 +1,4 @@
-# ABC Cargas — atualização v3: reservas e vistorias
+# ABC Cargas — atualização v4: PDF, CNH e cadastros ativos
 
 Esta atualização é para o sistema já hospedado no Render. Não é necessário instalar aplicativos no computador ou no celular.
 
@@ -20,7 +20,7 @@ Esta atualização é para o sistema já hospedado no Render. Não é necessári
 7. Mantenha as variáveis DATABASE_URL, JWT_SECRET, NODE_ENV e SEED_PASSWORD que já funcionam. Use o mesmo PostgreSQL.
 8. Aguarde o deploy automático ou acione **Manual Deploy → Deploy latest commit**. Quando aparecer **Live**, abra a URL habitual e atualize com Ctrl+F5.
 
-A migração acrescenta tabelas de reservas, vistorias, fotos e histórico de decisões. Não recria a frota, não troca a senha e não substitui os registros anteriores. A sessão continua válida por até 8 horas.
+A migração acrescenta os campos de CNH, vínculo com a conta e situação ativa dos motoristas, preservando as tabelas de reservas, vistorias, fotos e decisões. Não recria a frota, não troca a senha e não substitui os registros anteriores. A sessão continua válida por até 8 horas.
 
 ## Criar as contas
 
@@ -33,7 +33,7 @@ Com a conta administrativa, abra **Configurações → Gerenciar contas → Cria
 | Colaborador / motorista | Solicita reservas para si e registra as próprias retiradas/devoluções |
 | Consulta | Consulta os dados disponíveis ao perfil, sem aprovar ou registrar vistorias |
 
-Cada motorista precisa de uma conta individual. O responsável pode solicitar a reserva em nome de um motorista selecionado. A vistoria deve ser feita pela conta desse motorista, inclusive quando a reserva foi criada pelo responsável.
+Cada motorista precisa de uma conta individual. Em **Motoristas → Editar**, selecione essa conta, informe o número da CNH (11 dígitos), categoria e validade. Cadastros antigos ficam preservados, mas precisam desses dados antes de reservar ou retirar. O responsável pode solicitar a reserva em nome de um motorista selecionado. A vistoria deve ser feita pela conta desse motorista, inclusive quando a reserva foi criada pelo responsável.
 
 O perfil técnico antigo `operator` passa a representar o Colaborador. A administração geral dos cadastros fica com Administrador e Responsável. Nenhum convite é enviado automaticamente; informe o acesso ao usuário pelo meio habitual da empresa.
 
@@ -41,7 +41,7 @@ O perfil técnico antigo `operator` passa a representar o Colaborador. A adminis
 
 ### 1. Solicitar reserva
 
-Em **Reservas e vistorias**, escolha **Solicitar reserva**, informe retirada e devolução previstas, consulte os veículos livres e selecione a placa. Preencha finalidade e destino.
+Em **Reservas**, escolha **Solicitar reserva**, informe retirada e devolução previstas, consulte os veículos livres e selecione a placa. Preencha finalidade e destino.
 
 A reserva fica **Aguardando aprovação** e bloqueia provisoriamente aquele período. O sistema impede solicitações sobrepostas, inclusive quando são enviadas simultaneamente. O responsável deve aprovar ou recusar a solicitação. O cancelamento libera o horário e exige um motivo.
 
@@ -51,7 +51,7 @@ A alteração de veículo ou horário é feita cancelando a solicitação anteri
 
 ### 2. Check-in de retirada
 
-Após uma decisão do responsável, use **Atualizar** em Reservas e vistorias para carregar o novo status.
+Após uma decisão do responsável, use **Atualizar** em Reservas para carregar o novo status.
 
 O motorista entra em sua própria conta, abre a reserva aprovada e escolhe **Check-in · retirada**.
 
@@ -100,13 +100,13 @@ Cada foto exige autenticação. O motorista/solicitante acessa as evidências de
 - Para mudar o limite, configure `PHOTO_QUOTA_MB` no Render, conforme a capacidade disponível do seu PostgreSQL. Não é necessário para iniciar os testes.
 - O limite considera também as versões preservadas após correções. Ao atingir o limite, o envio é interrompido com uma mensagem, sem apagar evidências.
 
-Em cada reserva, **Exportar dossiê com fotos** gera um JSON com a reserva, vistorias, imagens e histórico. É um arquivo de arquivo/consulta técnica, não uma tela de importação. A exportação não apaga registros.
+Em cada reserva, **Exportar dossiê com fotos** gera um **PDF** com os dados da reserva, motorista, horários, KM, combustível, avarias, fotos comparativas e histórico. Inclui todas as versões de correção e imagens adicionais. É um relatório de consulta, não um arquivo de importação ou uma assinatura digital. A exportação não apaga registros.
 
 O backup JSON em Configurações cobre os cadastros anteriores, não as novas tabelas de reservas/fotos. Para uma recuperação integral, é necessário o backup do PostgreSQL; os dossiês permitem guardar uma cópia das evidências de cada reserva. A aplicação não configura automaticamente os backups do serviço de hospedagem.
 
 ## Ilustrações e celular
 
-A vista do pátio continua usando as ilustrações por modelo do catálogo inicial, com o estilo visual existente. Fotos de vistoria são evidências separadas e não substituem a figura do carro. Modelos adicionais mantêm o recurso já existente de ilustração por categoria ou imagem personalizada.
+A vista do pátio usa uma nova coleção de ilustrações para os 24 modelos do catálogo inicial, com o estilo visual aprovado e os destaques de status. São representações ilustrativas, não reproduções técnicas exatas de cada ano ou versão. Fotos de vistoria são evidências separadas e não substituem a figura do carro. Ao adicionar um modelo em Configurações, é possível enviar uma ilustração na vista superior para todos os veículos desse modelo. Sem esse arquivo, o modelo adicional usa uma ilustração da categoria. O sistema não gera novas imagens automaticamente. Imagens PNG enviadas preservam transparência. Os guias de fotos usam exemplos em 3D de frente, traseira, laterais, painel e avaria; são referências de enquadramento, não fotos do veículo reservado.
 
 As telas de retirada e devolução foram adaptadas para o navegador do celular: campos grandes, fotos guiadas, câmera/galeria, rascunho e progressão de envio. Esta entrega é a versão web; o aplicativo mobile simplificado será definido posteriormente.
 
@@ -115,7 +115,7 @@ Não há modo offline nesta versão. Os envios exigem internet; um arquivo só e
 ## Teste recomendado após a publicação
 
 1. Crie uma conta de Colaborador para o motorista e uma conta de Responsável.
-2. Em uma janela anônima ou outro dispositivo, entre como Colaborador e solicite um veículo disponível.
+2. Cadastre/vincule o motorista à conta e preencha CNH, categoria e validade. Em uma janela anônima ou outro dispositivo, entre como Colaborador e solicite um veículo disponível.
 3. Como Responsável, aprove a reserva.
 4. No celular, entre como motorista e faça o check-in com as cinco fotos.
 5. Confira o amarelo no pátio e a persistência após atualizar a página.
@@ -125,3 +125,17 @@ Não há modo offline nesta versão. Os envios exigem internet; um arquivo só e
 9. Exporte o dossiê e confirme que outro colaborador não acessa a reserva/fotos desse motorista.
 
 Use uma placa e fotos controladas para este primeiro teste operacional. As prévias incluídas no pacote usam imagens e contas de teste.
+
+## CNH e inativação na versão 4
+
+A CNH é considerada válida até o final da data cadastrada, no fuso de Brasília. Os avisos aparecem a 60, 30 e 7 dias, no dia do vencimento e após vencer. A página de Alertas mostra todas as ocorrências; o card inicial mostra as cinco primeiras não lidas. Entre os avisos de CNH, os vencimentos mais próximos aparecem primeiro. Alertas de CNH ficam presentes até a regularização, sem a opção de escondê-los como eventos lidos. As telas de Início, Motoristas e Alertas recalculam os avisos a cada minuto enquanto estiverem abertas e sem formulário em edição.
+
+CNH vencida, incompleta, categoria incompatível com veículos leves ou falta de vínculo entre conta e motorista impede novas reservas, aprovação e retirada. Uma reserva aprovada também é novamente verificada ao iniciar a vistoria e ao confirmar a retirada. A devolução e suas correções continuam permitidas se a CNH vencer durante o uso. O responsável pode reservar para outro motorista, desde que o cadastro desse motorista esteja regularizado.
+
+A verificação utiliza os dados cadastrados: **não há integração com DETRAN/Senatran**, nem consulta a suspensão/cassação nesta versão. Avisos são internos ao site; não são enviados por e-mail ou push.
+
+- Frota: abra Detalhes e escolha **Inativar**; o cadastro fica consultável na lista, fora do pátio, dos indicadores de frota ativa e de novas reservas. Use **Reativar** para voltar.
+- Motoristas: escolha **Inativar** no card. Seu histórico permanece; novos usos e avisos de CNH deixam de ser oferecidos.
+- Usuários: Administrador acessa **Configurações → Gerenciar contas → Inativar**. A próxima requisição da conta inativa exige novo acesso e será recusada; não é necessário esperar as oito horas da sessão. Usuário e motorista são situações independentes: inative ambos quando houver desligamento. A conta inativa também suprime os avisos de CNH do motorista vinculado.
+
+Resolva reservas pendentes/aprovadas e devoluções em andamento antes de inativar. Operações registradas manualmente também precisam ser encerradas. O sistema não cancela reservas nem apaga evidências automaticamente. Não é permitido inativar a própria conta ou remover o último administrador ativo.

@@ -33,5 +33,5 @@ export function vehicleMetrics(v,db,now=new Date()){
 }
 export function fleetCounts(vehicles){return {total:vehicles.length,available:vehicles.filter(v=>v.status==='Disponível').length,unavailable:vehicles.filter(v=>v.status==='Indisponível').length,operation:vehicles.filter(v=>v.status==='Em operação').length};}
 export function lifecycleAlerts(db,now=new Date()){
- return db.vehicles.flatMap(v=>{const m=vehicleMetrics(v,db,now);const reasons=m.reasons.length?m.reasons:m.warnings;if(!reasons.length)return[];return [{id:'LIFE-'+v.id+'-'+(m.reasons.length?'limit':'warning'),vehicle:v.id,title:m.reasons.length?'Revisar substituição':'Acompanhar ciclo de vida',text:reasons.join(' · '),level:m.level,read:false,date:now.toISOString().slice(0,10),derived:true}];});
+ return db.vehicles.filter(v=>v.active!==false).flatMap(v=>{const m=vehicleMetrics(v,db,now);const reasons=m.reasons.length?m.reasons:m.warnings;if(!reasons.length)return[];return [{id:'LIFE-'+v.id+'-'+(m.reasons.length?'limit':'warning'),vehicle:v.id,title:m.reasons.length?'Revisar substituição':'Acompanhar ciclo de vida',text:reasons.join(' · '),level:m.level,read:false,date:now.toISOString().slice(0,10),derived:true}];});
 }

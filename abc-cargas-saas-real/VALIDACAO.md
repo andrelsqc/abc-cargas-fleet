@@ -1,11 +1,15 @@
-# Validação da versão 3
+# Validação — versão 4
 
-- Nove testes automatizados: métricas preservadas, períodos com fuso, autorização do responsável, detecção de imagem e rejeição de fotos danificadas.
-- API: login, solicitação, conflito de horários, aprovação concorrente, cancelamento, contas/permissões, fotos obrigatórias, imagens distintas, check-in, checkout e bloqueio da liberação por cadastro genérico.
-- Correção: primeira versão preservada, novo rascunho, substituição da imagem solicitada, reenvio e aprovação justificada.
-- Histórico: integridade dos hashes nos dossiês exportados, proteção contra exclusão do veículo vinculado e persistência após nova migração/seed.
-- Privacidade: acesso negado a outro colaborador e a contas de outra empresa, inclusive para foto e dossiê.
-- Navegador: solicitação pelo colaborador, aprovação pelo responsável, check-in/checkout com uploads, rascunho, comparação dos cinco ângulos, devolução com indisponibilidade e criação de contas.
-- Layout: telas em 1440 × 1000 e 390 × 844, sem rolagem horizontal na vista de celular. As prévias usam contas e imagens de teste.
+- 11 testes automatizados de CNH, métricas e validação aprovados.
+- Verificação de sintaxe dos módulos do servidor e navegador.
+- Migrações 2/3/4 aplicadas em banco isolado; repetição preservou veículos, KM, senha e fotos.
+- API: reserva, conflito simultâneo, aprovação concorrente, permissões, cinco fotos obrigatórias/distintas, imutabilidade, retirada, checkout, solicitação de correção, versões anteriores preservadas e liberação.
+- CNH vencida bloqueou reserva e retirada de reserva já aprovada. CNH vencendo durante uso permitiu devolução e correção.
+- Inativação impedida com pendências; veículo inativo saiu da disponibilidade; motorista inativo não pôde reservar; conta inativa perdeu acesso com sessão existente; reativação funcionou.
+- Operações manuais também impediram inativação de veículo, motorista e conta enquanto Em operação.
+- Exportação PDF autenticada com comparações, 15 fotos de três vistorias e histórico; análise visual de páginas e download real no Chromium.
+- Navegador desktop 1440×1000 e celular simulado 390×844: menu Reservas, edição e gravação de CNH, alerta de sete dias no card inicial, download PDF, oito guias de fotos e ausência de rolagem horizontal/erros JavaScript.
 
-A validação foi realizada em ambiente isolado, com PostgreSQL em PGlite para os testes SQL/API e Chromium para as telas. Não acessou o banco publicado no Render. O comportamento da câmera e a permissão no telefone real devem ser conferidos no teste operacional após publicar; o envio de arquivos e as opções câmera/galeria foram verificados no navegador.
+Banco de teste: PostgreSQL via PGlite (WASM), isolado da produção. Isso valida as consultas e regras, mas não substitui o teste operacional no PostgreSQL do Render. A câmera física do telefone e a publicação na conta do usuário não foram executadas nesta validação.
+
+As prévias incluídas usam dados sintéticos. Imagens ilustrativas foram criadas com a ferramenta integrada de geração de imagens: atlas de 24 modelos na vista superior e guia de seis vistas no estilo 3D prata. As figuras são representações, sem garantia de correspondência exata de acabamento/ano.
