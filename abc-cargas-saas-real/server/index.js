@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { pool, tx } from './db.js';
 import {CATALOG,DEFAULT_POLICY} from './catalog.js';
 import {validateState,InputError} from './validation.js';
+import {installReservations,listReservations,managers} from './reservations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -25,10 +26,10 @@ function issueSession(res, user){
   const token = jwt.sign({ sub:user.id, org:user.organization_id, role:user.role, name:user.name, email:user.email }, JWT_SECRET, {expiresIn:'8h'});
   res.cookie(COOKIE, token, {httpOnly:true, sameSite:'lax', secure:isProd, maxAge:8*60*60*1000, path:'/'});
 }
-function auth(req,res,next){
+async function auth(req,res,next){
   const token=req.cookies[COOKIE];
   if(!token) return res.status(401).json({error:'Não autenticado'});
-  try { req.user=jwt.verify(token,JWT_SECRET); next(); }
+  try { req.user=jwt.verify(token,JWT_SECRET); const live=(await pool.query('SELECT role,name,email FROM users WHERE id=$1 AND organization_id=$2 AND active=true',[req.user.sub,req.user.org])).rows[0];if(!live)return res.status(401).json({error:'Conta desativada.'});Object.assign(req.user,live);next(); }
   catch { return res.status(401).json({error:'Sessão expirada'}); }
 }
 function role(...allowed){return (req,res,next)=>allowed.includes(req.user.role)?next():res.status(403).json({error:'Permissão insuficiente'});}
@@ -57,23 +58,21 @@ const numFields={vehicles:['km','fuel'],fuel:['liters','km']};
 async function loadState(orgId){
  return tx(async c=>{
  await c.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
- const [v,d,m,f,n,s,y]=await Promise.all([
-  c.query(`SELECT code id,plate,model,status,km,driver,to_char(next_maintenance,'YYYY-MM-DD') "nextMaintenance",fuel,details FROM vehicles WHERE organization_id=$1 ORDER BY plate`,[orgId]),
-  c.query(`SELECT code id,name,license,status FROM drivers WHERE organization_id=$1 ORDER BY name`,[orgId]),
-  c.query(`SELECT code id,vehicle_code vehicle,type,to_char(service_date,'YYYY-MM-DD') date,status,notes,details FROM maintenance WHERE organization_id=$1 ORDER BY service_date DESC`,[orgId]),
-  c.query(`SELECT code id,vehicle_code vehicle,to_char(service_date,'YYYY-MM-DD') date,liters,km,driver,details FROM fuel_records WHERE organization_id=$1 ORDER BY service_date DESC,code`,[orgId]),
-  c.query(`SELECT code id,vehicle_code vehicle,title,body text,level,read,to_char(event_date,'YYYY-MM-DD') date FROM notifications WHERE organization_id=$1 ORDER BY event_date DESC`,[orgId]),
-  c.query(`SELECT company_name company,details,revision FROM organization_settings WHERE organization_id=$1`,[orgId]),
-  c.query(`SELECT code id,name,address FROM yards WHERE organization_id=$1 ORDER BY name`,[orgId])
- ]);
+ const v=await c.query(`SELECT code id,plate,model,status,km,driver,to_char(next_maintenance,'YYYY-MM-DD') "nextMaintenance",fuel,details FROM vehicles WHERE organization_id=$1 ORDER BY plate`,[orgId]);
+ const d=await c.query(`SELECT code id,name,license,status FROM drivers WHERE organization_id=$1 ORDER BY name`,[orgId]);
+ const m=await c.query(`SELECT code id,vehicle_code vehicle,type,to_char(service_date,'YYYY-MM-DD') date,status,notes,details FROM maintenance WHERE organization_id=$1 ORDER BY service_date DESC`,[orgId]);
+ const f=await c.query(`SELECT code id,vehicle_code vehicle,to_char(service_date,'YYYY-MM-DD') date,liters,km,driver,details FROM fuel_records WHERE organization_id=$1 ORDER BY service_date DESC,code`,[orgId]);
+ const n=await c.query(`SELECT code id,vehicle_code vehicle,title,body text,level,read,to_char(event_date,'YYYY-MM-DD') date FROM notifications WHERE organization_id=$1 ORDER BY event_date DESC`,[orgId]);
+ const s=await c.query(`SELECT company_name company,details,revision FROM organization_settings WHERE organization_id=$1`,[orgId]);
+ const y=await c.query(`SELECT code id,name,address FROM yards WHERE organization_id=$1 ORDER BY name`,[orgId]);
  const merge=(rows,key)=>rows.map(row=>{const {details,...base}=row;const item={...(details||{}),...base};for(const field of numFields[key]||[])item[field]=Number(item[field]);return item});
  return {state:{vehicles:merge(v.rows,'vehicles'),drivers:d.rows,maintenance:merge(m.rows,'maintenance'),fuel:merge(f.rows,'fuel'),notifications:n.rows,yards:y.rows,settings:{policy:DEFAULT_POLICY,catalog:[],...(s.rows[0]?.details||{}),company:s.rows[0]?.company||'ABC Cargas',user:''}},revision:Number(s.rows[0]?.revision||0)};
  });
 }
 app.get('/api/catalog',auth,(_req,res)=>res.json({catalog:CATALOG}));
 app.get('/api/bootstrap',auth,async(req,res)=>{
- const result=await loadState(req.user.org);result.state.settings.user=req.user.name;
- res.json({...result,catalog:CATALOG,user:{id:req.user.sub,name:req.user.name,email:req.user.email,role:req.user.role},schemaVersion:2});
+ const result=await loadState(req.user.org);result.state.settings.user=req.user.name;result.reservations=await listReservations(pool,req.user);result.vehicleWorkflow=(await pool.query("SELECT vehicle_code, status FROM fleet_reservations WHERE organization_id=$1 AND status IN ('active','reviewing','correction')",[req.user.org])).rows;
+ res.json({...result,catalog:CATALOG,user:{id:req.user.sub,name:req.user.name,email:req.user.email,role:req.user.role},schemaVersion:3,features:{reservations:true,photos:true}});
 });
 const vehicleExtras=['brand','bodyType','year','color','yardId','purchaseDate','purchaseKm','purchaseValue','currentValue','residualValue','lifecycleMonths','replacementKm','trackerId','position','image'];
 const picked=(obj,keys)=>Object.fromEntries(keys.filter(k=>obj[k]!==undefined).map(k=>[k,obj[k]]));
@@ -84,13 +83,15 @@ async function upsert(c,table,org,rows,fields,extras=[]){
  for(const row of rows){const values=[org,row.id,...fields.map(([,key,fallback])=>row[key]??fallback),...(extras.length?[JSON.stringify(picked(row,extras))]:[])];await c.query(sql,values);}
 }
 async function removeMissing(c,table,org,rows){await c.query(`DELETE FROM ${table} WHERE organization_id=$1 AND NOT(code=ANY($2::text[]))`,[org,rows.map(x=>x.id)]);}
-app.post('/api/state/sync',auth,role('admin','manager','operator'),async(req,res)=>{
+app.post('/api/state/sync',auth,role('admin','manager'),async(req,res)=>{
  const state=validateState(req.body?.state), revision=req.body?.revision;
  if(!Number.isInteger(revision)||revision<0)throw new InputError('Atualize a página para carregar a nova versão do sistema.',409);
  const org=req.user.org;
  await tx(async c=>{
   const lock=await c.query('SELECT revision FROM organization_settings WHERE organization_id=$1 FOR UPDATE',[org]);
   if(Number(lock.rows[0]?.revision)!==revision)throw new InputError('Outra sessão atualizou os dados. Recarregue a página antes de salvar.',409);
+  const protectedVehicles=(await c.query("SELECT DISTINCT vehicle_code FROM fleet_reservations WHERE organization_id=$1 AND status IN ('active','reviewing','correction')",[org])).rows;
+  for(const p of protectedVehicles){const old=(await c.query('SELECT status,km,driver,fuel FROM vehicles WHERE organization_id=$1 AND code=$2',[org,p.vehicle_code])).rows[0],v=state.vehicles.find(v=>v.id===p.vehicle_code);if(!v||v.status!==old.status||Number(v.km)!==Number(old.km)||v.driver!==old.driver||Number(v.fuel)!==Number(old.fuel))throw new InputError('O veículo possui utilização ou conferência pendente. Altere os dados pelo fluxo de vistoria.',409);}
   await upsert(c,'yards',org,state.yards,[['name','name'],['address','address','']]);
   await upsert(c,'vehicles',org,state.vehicles,[['plate','plate'],['model','model'],['status','status'],['km','km',0],['driver','driver','—'],['next_maintenance','nextMaintenance',null],['fuel','fuel',0]],vehicleExtras);
   await upsert(c,'drivers',org,state.drivers,[['name','name'],['license','license','B'],['status','status']]);
@@ -103,7 +104,7 @@ app.post('/api/state/sync',auth,role('admin','manager','operator'),async(req,res
  res.json({ok:true,revision:revision+1});
 });
 // Manual last-position entry now. Provider adapters can later call an authenticated integration path.
-app.post('/api/vehicles/:id/position',auth,role('admin','manager','operator'),async(req,res)=>{
+app.post('/api/vehicles/:id/position',auth,role('admin','manager'),async(req,res)=>{
  const lat=Number(req.body?.lat),lng=Number(req.body?.lng),at=req.body?.at||new Date().toISOString();
  if(typeof req.body?.lat!=='number'||typeof req.body?.lng!=='number'||!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lng)||Math.abs(lng)>180||Number.isNaN(Date.parse(at)))throw new InputError('Coordenadas ou horário inválidos.');
  let revision;
@@ -119,6 +120,7 @@ app.post('/api/vehicles/:id/position',auth,role('admin','manager','operator'),as
 app.post('/api/users',auth,role('admin'),async(req,res)=>{
   const name=String(req.body?.name||'').trim(), email=String(req.body?.email||'').trim().toLowerCase(), password=String(req.body?.password||''), roleName=String(req.body?.role||'viewer');
   if(!name||!email||password.length<8) return res.status(400).json({error:'Nome, e-mail e senha (mín. 8 caracteres) são obrigatórios.'});
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'E-mail inválido.'});
   if(!['admin','manager','operator','viewer'].includes(roleName)) return res.status(400).json({error:'Perfil inválido.'});
   const hash=await bcrypt.hash(password,12);
   try { const {rows}=await pool.query(`INSERT INTO users(organization_id,name,email,password_hash,role) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,active`,[req.user.org,name,email,hash,roleName]); res.status(201).json({user:rows[0]}); }
@@ -126,8 +128,9 @@ app.post('/api/users',auth,role('admin'),async(req,res)=>{
 });
 app.get('/api/users',auth,role('admin','manager'),async(req,res)=>{const {rows}=await pool.query(`SELECT id,name,email,role,active,created_at FROM users WHERE organization_id=$1 ORDER BY name`,[req.user.org]);res.json({users:rows});});
 
-app.use(express.static(path.join(__dirname,'../public'),{setHeaders(res,file){if(file.endsWith('.html'))res.set('Cache-Control','no-cache')}}));
+installReservations(app,auth);
+app.use(express.static(path.join(__dirname,'../public'),{setHeaders(res,file){if(/\.(html|js|css)$/.test(file))res.set('Cache-Control','no-cache')}}));
 app.use((req,res)=>{ if(req.method==='GET' && req.accepts('html')) return res.sendFile(path.join(__dirname,'../public/index.html')); res.status(404).json({error:'Rota não encontrada'}); });
 
-app.use((err,_req,res,_next)=>{if(err instanceof InputError)return res.status(err.status).json({error:err.message});if(err.code==='23505')return res.status(409).json({error:'Placa ou registro já cadastrado.'});if(err.type==='entity.too.large')return res.status(413).json({error:'Dados muito grandes. Reduza as imagens.'});console.error(err);res.status(500).json({error:'Não foi possível concluir a operação. Tente novamente.'});});
+app.use((err,_req,res,_next)=>{if(err instanceof InputError)return res.status(err.status).json({error:err.message});if(['23503','23001'].includes(err.code))return res.status(409).json({error:'Este cadastro possui reservas ou vistorias e não pode ser excluído. Preserve o histórico.'});if(err.code==='23505')return res.status(409).json({error:'Placa ou registro já cadastrado.'});if(err.type==='entity.too.large')return res.status(413).json({error:'Dados muito grandes. Reduza as imagens.'});console.error(err);res.status(500).json({error:'Não foi possível concluir a operação. Tente novamente.'});});
 app.listen(PORT,()=>console.log(`ABC Cargas SaaS: http://localhost:${PORT}`));

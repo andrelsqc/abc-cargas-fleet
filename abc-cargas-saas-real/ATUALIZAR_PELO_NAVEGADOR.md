@@ -1,87 +1,127 @@
-# Atualização ABC Cargas — versão 2
+# ABC Cargas — atualização v3: reservas e vistorias
 
-A atualização é feita pelo navegador. Não é necessário instalar Node.js nem Docker neste computador. Esses componentes rodam na hospedagem.
+Esta atualização é para o sistema já hospedado no Render. Não é necessário instalar aplicativos no computador ou no celular.
 
-## 1. Preparar
+## Publicar pelo navegador
 
-1. Exporte o backup no sistema atual, em Configurações, e guarde o arquivo.
-2. Baixe e extraia o ZIP desta atualização usando o Windows.
-3. Dentro dele, abra a pasta `abc-cargas-saas-real`.
+1. No sistema atual, exporte o backup dos cadastros em Configurações e guarde o arquivo. Mantenha também o histórico de versões do GitHub.
+2. Baixe e extraia o ZIP da atualização. Abra a pasta `abc-cargas-saas-real` dentro dele.
+3. No GitHub, abra `andrelsqc/abc-cargas-fleet`, selecione a branch `main` e entre na pasta `abc-cargas-saas-real`.
+4. Use **Add file → Upload files** e arraste **o conteúdo da pasta extraída** para a página, incluindo as pastas `public`, `server`, `db` e `tests`, além dos arquivos da raiz. Não arraste a pasta externa para dentro da pasta com o mesmo nome.
+5. Confirme em **Commit changes**. Toda a atualização deve entrar no mesmo commit. Não atualize somente o HTML.
+6. No mesmo serviço do Render, mantenha:
 
-O backup antigo serve como registro dos dados anteriores. A nova tela de importação aceita backups da versão 2. Não importe o backup antigo após atualizar: seus dados continuarão no mesmo PostgreSQL.
+| Campo | Configuração |
+|---|---|
+| Root Directory | `abc-cargas-saas-real` |
+| Build Command | `npm install` ou `npm ci` |
+| Start Command | `npm run db:migrate && npm run db:seed && npm start` |
 
-## 2. Enviar ao GitHub
+7. Mantenha as variáveis DATABASE_URL, JWT_SECRET, NODE_ENV e SEED_PASSWORD que já funcionam. Use o mesmo PostgreSQL.
+8. Aguarde o deploy automático ou acione **Manual Deploy → Deploy latest commit**. Quando aparecer **Live**, abra a URL habitual e atualize com Ctrl+F5.
 
-1. Abra seu repositório `andrelsqc/abc-cargas-fleet`.
-2. Selecione a branch `main`, não uma tela de commit antigo.
-3. Entre na pasta `abc-cargas-saas-real`.
-4. Clique em **Add file → Upload files**. Em algumas larguras da tela, a ação fica em um menu de três pontos.
-5. Arraste **o conteúdo da pasta extraída**, incluindo as pastas `public`, `server`, `db`, `tests` e os arquivos da raiz. Não arraste a pasta externa `abc-cargas-saas-real`, para evitar criar outra pasta com o mesmo nome dentro dela.
-6. Confira que aparecerão, entre outros, `public/app.js`, `public/styles.css`, `public/metrics.js`, `public/assets/vehicles.png`, `server/catalog.js`, `server/validation.js` e `db/upgrade-v2.sql`.
-7. Use **Commit changes** para confirmar a atualização.
+A migração acrescenta tabelas de reservas, vistorias, fotos e histórico de decisões. Não recria a frota, não troca a senha e não substitui os registros anteriores. A sessão continua válida por até 8 horas.
 
-Esta versão precisa dos arquivos de interface, servidor e banco juntos. Atualizar somente `public/index.html` não é suficiente.
+## Criar as contas
 
-## 3. Publicar no Render
+Com a conta administrativa, abra **Configurações → Gerenciar contas → Criar conta**.
 
-Mantenha o mesmo serviço e o mesmo banco. Não crie outro PostgreSQL.
+| Perfil | Permissões nesta versão |
+|---|---|
+| Administrador | Gerencia a frota, cria contas e aprova reservas/devoluções |
+| Responsável | Gerencia a frota e aprova reservas/devoluções |
+| Colaborador / motorista | Solicita reservas para si e registra as próprias retiradas/devoluções |
+| Consulta | Consulta os dados disponíveis ao perfil, sem aprovar ou registrar vistorias |
 
-- Root Directory: `abc-cargas-saas-real`, conforme a configuração que já funcionou.
-- Build Command: `npm install` (ou `npm ci`).
-- Start Command: `npm run db:migrate && npm run db:seed && npm start`.
-- Mantenha DATABASE_URL, JWT_SECRET, NODE_ENV e SEED_PASSWORD já configurados.
+Cada motorista precisa de uma conta individual. O responsável pode solicitar a reserva em nome de um motorista selecionado. A vistoria deve ser feita pela conta desse motorista, inclusive quando a reserva foi criada pelo responsável.
 
-Se o deploy automático estiver ativo, aguarde ficar **Live**. Caso contrário, use **Manual Deploy → Deploy latest commit**. Reabra o endereço publicado e atualize com Ctrl+F5.
+O perfil técnico antigo `operator` passa a representar o Colaborador. A administração geral dos cadastros fica com Administrador e Responsável. Nenhum convite é enviado automaticamente; informe o acesso ao usuário pelo meio habitual da empresa.
 
-A migração adiciona campos e um pátio principal, preservando os códigos internos que ligam manutenções e abastecimentos. Executar a migração novamente não recria os dados. O seed também preserva a empresa existente e sua senha. Se houver placas duplicadas no banco antigo, a migração interrompe a atualização sem apagar registros: será necessário corrigir as duplicidades primeiro.
+## Como usar
 
-## 4. Organizar os dados
+### 1. Solicitar reserva
 
-1. Em **Pátios**, cadastre suas unidades.
-2. Em **Frota**, revise cada veículo: placa, montadora, modelo e pátio.
-3. Os modelos antigos foram preservados e sinalizados para revisão. Escolha o veículo leve correto; nenhuma conversão automática foi feita.
-4. Preencha aquisição, valor residual, vida útil planejada e quilometragem limite.
-5. Em **Configurações**, ajuste a política de renovação à sua operação. Os limites iniciais são demonstrativos.
+Em **Reservas e vistorias**, escolha **Solicitar reserva**, informe retirada e devolução previstas, consulte os veículos livres e selecione a placa. Preencha finalidade e destino.
 
-A placa é a identificação mostrada em todas as telas. O sistema mantém apenas uma chave interna invisível para preservar o histórico.
+A reserva fica **Aguardando aprovação** e bloqueia provisoriamente aquele período. O sistema impede solicitações sobrepostas, inclusive quando são enviadas simultaneamente. O responsável deve aprovar ou recusar a solicitação. O cancelamento libera o horário e exige um motivo.
 
-## Mudanças incluídas
+O veículo continua com sua condição atual no painel: uma reserva futura não muda o status para Em operação. Carros indisponíveis não são oferecidos. Um carro em operação sem reserva que informe previsão de devolução também não é oferecido como livre.
 
-- Retirada dos gráficos de utilização e status e do card de quilometragem total.
-- Cards Total de veículos, Disponíveis, Indisponíveis e Operação, sem os textos adicionais antigos.
-- Operação em amarelo, com destaque e etiqueta no pátio; indisponibilidade em vermelho.
-- Cadastro de pátios e seleção da unidade no painel; quantidade de carros acompanha o cadastro.
-- Catálogo inicial de 24 modelos de 7 montadoras, com modelos dependentes da montadora. É possível adicionar opções em Configurações.
-- Ilustrações diferentes para os modelos do catálogo inicial. São imagens ilustrativas, não fotografias oficiais. Modelos adicionados usam uma ilustração da categoria; uma foto personalizada pode ser cadastrada em cada veículo.
-- Mapa do veículo selecionado com data, origem e coordenadas da última posição.
-- Relatórios de consumo comparável, custo registrado por km, depreciação linear, vida restante e alertas de substituição.
-- Custos de manutenção, dias de indisponibilidade, custos de abastecimento e marcação de tanque completo.
-- Exportação CSV, backup versão 2 e proteção contra gravação de uma sessão desatualizada.
+A alteração de veículo ou horário é feita cancelando a solicitação anterior e criando uma nova. O registro cancelado permanece no histórico.
 
-## Rastreador: etapa ainda necessária
+### 2. Check-in de retirada
 
-O mapa está disponível, mas a conexão automática com o rastreador depende do fornecedor, da documentação da API e das credenciais. Nesta versão, as posições são informadas manualmente e exibidas como **Posição informada manualmente**. Não há rastreamento ao vivo. O identificador do rastreador pode ser cadastrado no veículo para a integração posterior.
+Após uma decisão do responsável, use **Atualizar** em Reservas e vistorias para carregar o novo status.
 
-## Como os indicadores funcionam
+O motorista entra em sua própria conta, abre a reserva aprovada e escolhe **Check-in · retirada**.
 
-- **Depreciação:** (aquisição − residual) / vida útil em meses. A estimativa diminui com os meses completos de uso, sem ficar abaixo do residual. É uma estimativa gerencial, sem consulta FIPE ou cálculo fiscal.
-- **KM/L:** exige dois abastecimentos com tanque completo. Soma também os abastecimentos parciais entre eles.
-- **Custo registrado/km:** custos de combustível informados e manutenção concluída no intervalo entre os abastecimentos. Não representa todos os custos de propriedade.
-- **Substituição:** alerta por idade de uso, quilometragem ou manutenção concluída nos últimos 12 meses em relação ao valor base informado/estimado. O alerta orienta uma revisão, sem decidir automaticamente pela substituição.
-- Campos ausentes são mostrados como dados insuficientes. Valores de compra, residual e mercado devem ser informados pela empresa.
+Informe KM inicial, combustível e eventuais avarias. Envie as cinco fotos obrigatórias:
 
-## Conferência após publicar
+- Frente: veículo inteiro, faróis, para-choque e placa.
+- Traseira: veículo inteiro, lanternas e para-choque.
+- Lateral esquerda: portas, rodas e retrovisor.
+- Lateral direita: portas, rodas e retrovisor.
+- Painel: odômetro, combustível e luzes de advertência.
 
-1. Entrar com a conta atual e verificar os quatro cards.
-2. Cadastrar um pátio, vincular um veículo e selecionar esse pátio no painel.
-3. Alterar o status para Em operação e confirmar o amarelo.
-4. Recarregar a página e conferir a persistência.
-5. Cadastrar um novo veículo e conferir que ele aparece no pátio.
-6. Abrir Mapa e informar uma posição para conferir marcador e identificação manual.
-7. Preencher aquisição e residual e conferir Relatórios.
+Há três campos adicionais para detalhes de danos ou interior. É possível usar a câmera do telefone ou escolher uma imagem da galeria. A câmera depende do suporte e da permissão do navegador do dispositivo.
 
-## Validação desta entrega
+As fotos são reduzidas no navegador antes do envio. Aguarde aparecer **Foto salva**. O envio de cada foto é salvo imediatamente; use **Salvar rascunho** para guardar também os campos e continuar depois.
 
-Testados em banco PostgreSQL isolado: migração de dados antigos, repetição da migração, preservação de status, km, históricos e empresa; login; gravação e recarga; rejeição de placas/pátios/datas inválidos; conflito entre sessões.
+Confirme a declaração e envie a vistoria. O sistema exige as cinco fotos e bloqueia a reutilização do mesmo arquivo em vários ângulos ou entre retirada e devolução.
 
-Testados em navegador: cadastro de pátio e veículo, 11 veículos no pátio, filtros, amarelo de operação, todas as páginas, posição manual e layout em celular. Os testes não acessaram o banco publicado da empresa.
+A retirada é permitida a partir de 30 minutos antes do início previsto e antes do fim da reserva. Também exige que o veículo esteja disponível, sem outra utilização ou conferência pendente. Ao concluir, o veículo fica **Em operação**, em amarelo.
+
+### 3. Checkout de devolução
+
+Ao entregar o veículo, o motorista abre a mesma reserva e escolhe **Checkout · devolução**. Registra KM final, combustível, avarias e as cinco fotos dos mesmos ângulos.
+
+O KM final não pode ser menor que o inicial ou que a quilometragem atual. Ao enviar, a reserva fica **Aguardando conferência**. O pátio mantém o amarelo e mostra essa identificação; o carro ainda não está liberado para nova retirada.
+
+### 4. Conferência do responsável
+
+O responsável abre a reserva e compara retirada e devolução lado a lado. Pode ampliar cada foto e consultar os campos e o histórico.
+
+- **Aprovar devolução:** escolhe Disponível ou Indisponível conforme a condição do veículo. A liberação com avarias exige justificativa.
+- **Solicitar correção:** informa o que precisa ser corrigido. O motorista recebe essa orientação na reserva e envia outra versão do checkout.
+
+A versão enviada anteriormente continua guardada. Na correção, o novo rascunho reaproveita as fotos já enviadas e permite substituir as que precisam melhorar, preservando a origem e o horário das imagens reaproveitadas.
+
+Reservas futuras afetadas por indisponibilidade e utilizações que ultrapassam o prazo recebem avisos nas telas. A próxima retirada continua bloqueada enquanto houver utilização, conferência ou indisponibilidade. Os avisos são internos ao sistema; esta versão não envia notificações por e-mail ou push.
+
+## Armazenamento e histórico
+
+Nesta versão, as fotos ficam no PostgreSQL existente, em tabelas separadas dos cadastros. Isso mantém os arquivos após reinícios/deploys e evita colocar todas as fotos no carregamento do dashboard. Não use pastas locais do Render para guardar evidências.
+
+Cada foto exige autenticação. O motorista/solicitante acessa as evidências de suas próprias reservas; Administrador e Responsável acessam as da empresa. Os registros guardam conta, horário do envio, ângulo e hash do arquivo. O horário é o do envio ao sistema, não uma certificação do instante em que a câmera foi acionada.
+
+- Foto recebida pelo servidor: até 700 KB, em JPEG, PNG ou WebP.
+- Redução automática no navegador: até 1600 pixels e alvo de até 650 KB.
+- Limite inicial das fotos por empresa: **250 MB**. É um limite da aplicação, não uma informação sobre a capacidade contratada do banco.
+- Para mudar o limite, configure `PHOTO_QUOTA_MB` no Render, conforme a capacidade disponível do seu PostgreSQL. Não é necessário para iniciar os testes.
+- O limite considera também as versões preservadas após correções. Ao atingir o limite, o envio é interrompido com uma mensagem, sem apagar evidências.
+
+Em cada reserva, **Exportar dossiê com fotos** gera um JSON com a reserva, vistorias, imagens e histórico. É um arquivo de arquivo/consulta técnica, não uma tela de importação. A exportação não apaga registros.
+
+O backup JSON em Configurações cobre os cadastros anteriores, não as novas tabelas de reservas/fotos. Para uma recuperação integral, é necessário o backup do PostgreSQL; os dossiês permitem guardar uma cópia das evidências de cada reserva. A aplicação não configura automaticamente os backups do serviço de hospedagem.
+
+## Ilustrações e celular
+
+A vista do pátio continua usando as ilustrações por modelo do catálogo inicial, com o estilo visual existente. Fotos de vistoria são evidências separadas e não substituem a figura do carro. Modelos adicionais mantêm o recurso já existente de ilustração por categoria ou imagem personalizada.
+
+As telas de retirada e devolução foram adaptadas para o navegador do celular: campos grandes, fotos guiadas, câmera/galeria, rascunho e progressão de envio. Esta entrega é a versão web; o aplicativo mobile simplificado será definido posteriormente.
+
+Não há modo offline nesta versão. Os envios exigem internet; um arquivo só está guardado quando o sistema confirma o envio. Campos preenchidos sem salvar o rascunho podem ser perdidos ao fechar a página.
+
+## Teste recomendado após a publicação
+
+1. Crie uma conta de Colaborador para o motorista e uma conta de Responsável.
+2. Em uma janela anônima ou outro dispositivo, entre como Colaborador e solicite um veículo disponível.
+3. Como Responsável, aprove a reserva.
+4. No celular, entre como motorista e faça o check-in com as cinco fotos.
+5. Confira o amarelo no pátio e a persistência após atualizar a página.
+6. Faça o checkout e confirme que o carro continua aguardando conferência.
+7. Como Responsável, compare as fotos, solicite uma correção e confira a preservação da primeira versão.
+8. Aprove a nova devolução e escolha a condição final.
+9. Exporte o dossiê e confirme que outro colaborador não acessa a reserva/fotos desse motorista.
+
+Use uma placa e fotos controladas para este primeiro teste operacional. As prévias incluídas no pacote usam imagens e contas de teste.
