@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {vehicleMetrics,fleetCounts} from '../public/metrics.js';
+import {validateState,InputError} from '../server/validation.js';
+const base=()=>({vehicles:[{id:'V1',plate:'ABC1D23',brand:'Volkswagen',model:'Polo',status:'Em operação',km:20000,fuel:50,driver:'—',yardId:'Y1'}],yards:[{id:'Y1',name:'Principal',address:''}],drivers:[],maintenance:[],fuel:[],notifications:[],settings:{company:'Teste',policy:{maxAgeMonths:60,maxKm:150000,maxMaintenancePercent:15,warningPercent:80}}});
+test('depreciação respeita residual e indica prazo vencido',()=>{const db=base(),v={...db.vehicles[0],purchaseDate:'2020-01-01',purchaseValue:100000,residualValue:40000,lifecycleMonths:60};const m=vehicleMetrics(v,db,new Date('2026-09-30T12:00:00'));assert.equal(m.monthly,1000);assert.equal(m.estimatedValue,40000);assert.equal(m.depreciation,60000);assert.equal(m.monthRemaining,0);assert(m.reasons.includes('Limite de idade atingido'));});
+test('falta de dados não produz desempenho ou valor inventado',()=>{const db=base(),m=vehicleMetrics(db.vehicles[0],db);assert.equal(m.estimatedValue,null);assert.equal(m.kmPerLiter,null);assert.equal(m.costPerKm,null);});
+test('consumo considera parcial entre dois tanques completos',()=>{const db=base();db.fuel=[{vehicle:'V1',km:1000,liters:40,fullTank:true},{vehicle:'V1',km:1200,liters:10},{vehicle:'V1',km:1500,liters:40,fullTank:true}];assert.equal(vehicleMetrics(db.vehicles[0],db).kmPerLiter,10);});
+test('operação é um estado separado e totais fecham',()=>{const c=fleetCounts([{status:'Disponível'},{status:'Em operação'},{status:'Indisponível'}]);assert.deepEqual(c,{total:3,available:1,unavailable:1,operation:1});});
+test('valida placas repetidas, pátio, catálogo e datas sem erro interno',()=>{let db=base();assert.equal(validateState(db).vehicles[0].plate,'ABC1D23');for(const mutate of [d=>d.vehicles.push({...d.vehicles[0],id:'V2'}),d=>d.vehicles[0].yardId='INEXISTENTE',d=>d.vehicles[0].model='Caminhão',d=>d.vehicles[0].purchaseDate='2026-99-99']){db=base();mutate(db);assert.throws(()=>validateState(db),InputError)}});

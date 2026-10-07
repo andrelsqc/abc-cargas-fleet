@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {interval,photoType,checkPhoto,managers} from '../server/reservations.js';import {InputError} from '../server/validation.js';
+test('períodos exigem ordem, limite e fuso',()=>{assert.equal(interval('2026-10-06T08:00:00-03:00','2026-10-06T10:00:00-03:00').end.toISOString(),'2026-10-06T13:00:00.000Z');for(const [a,b] of [['2026-10-06T08:00:00','2026-10-06T10:00:00'],['2026-10-06T08:00:00Z','2026-10-06T07:00:00Z'],['2026-10-06T08:00:00Z','2027-10-06T08:00:00Z'],['invalid','invalid']])assert.throws(()=>interval(a,b),InputError)});
+test('somente responsável pode aprovar',()=>{assert(managers({role:'admin'}));assert(managers({role:'manager'}));assert.equal(managers({role:'operator'}),false);assert.equal(managers({role:'viewer'}),false)});
+test('assinatura de foto rejeita SVG e texto',()=>{assert.equal(photoType(Buffer.from('<svg>'+'.'.repeat(500))),null);const png=Buffer.alloc(200);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);assert.equal(photoType(png),'image/png');assert.equal(photoType(Buffer.alloc(10)),null)});
+
+test('fotos danificadas não satisfazem a vistoria',async()=>{const png=Buffer.alloc(200);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);await assert.rejects(()=>checkPhoto(png),InputError)});
