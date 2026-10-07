@@ -48,3 +48,36 @@
 [data-theme=dark] .table tbody tr:nth-child(even),[data-theme=dark] .table tbody tr:nth-child(even) td{background:#223248}
 [data-theme=dark] .muted,[data-theme=dark] .smallButton{color:#c4d7ee}
 [data-theme=dark] .smallButton{background:#31445c}
+/* O piso do pátio mantém a aparência original em todos os temas. */
+.yardScene{background-color:#3c4349;background-image:radial-gradient(#ffffff0b .6px,transparent .8px),linear-gradient(90deg,#272f3760,#ffffff08,#272f3760);background-size:4px 4px,100% 100%;border:7px solid #788482;box-shadow:inset 0 0 0 2px #a8b1ac,inset 0 0 35px #0008;color:#eaf0f7;--parking-line:#edcd38}
+.yardScene .empty,.yardScene .empty strong,.yardScene .empty h3{color:#eaf0f7}
+.contrastOption{display:flex;align-items:center;gap:10px;margin-top:20px;cursor:pointer}
+.contrastOption input{width:22px;height:22px;accent-color:var(--red);flex-shrink:0}
+:root[data-contrast=high]{color:#000;background:#fff;--muted:#333;--border:#222;--red:#b30a22;--green:#006b3e;--blue:#004bb5;--shadow:none;--hc-surface:#fff;--hc-alt:#f0f0f0;--hc-ink:#000;--hc-link:#004bb5}
+:root[data-contrast=high][data-theme=dark]{color:#fff;background:#000;--muted:#f0f0f0;--border:#fff;--hc-surface:#000;--hc-alt:#161616;--hc-ink:#fff;--hc-link:#8ec5ff}
+[data-contrast=high] body{background:var(--hc-surface);color:var(--hc-ink)}
+[data-contrast=high] .sidebar,[data-contrast=high] .header,[data-contrast=high] .panel,[data-contrast=high] .kpi,[data-contrast=high] .vehicleCard,[data-contrast=high] .yardCard,[data-contrast=high] .modal,[data-contrast=high] .authCard{background:var(--hc-surface);color:var(--hc-ink);border-color:var(--border);box-shadow:none}
+[data-contrast=high] .panel,[data-contrast=high] .kpi,[data-contrast=high] .vehicleCard,[data-contrast=high] .yardCard{border-width:2px}
+[data-contrast=high] .panelHeader,[data-contrast=high] .event,[data-contrast=high] .modal header,[data-contrast=high] .table td,[data-contrast=high] .table th{border-color:var(--border)}
+[data-contrast=high] input,[data-contrast=high] select,[data-contrast=high] textarea{background:var(--hc-surface);color:var(--hc-ink);border:2px solid var(--border)}
+[data-contrast=high] input::placeholder,[data-contrast=high] textarea::placeholder{color:var(--muted);opacity:1}
+[data-contrast=high] .sideBottom,[data-contrast=high] .metricBox,[data-contrast=high] .searchWrap,[data-contrast=high] .secondary,[data-contrast=high] .smallButton,[data-contrast=high] .table th{background:var(--hc-alt);color:var(--hc-ink);border:1px solid var(--border)}
+[data-contrast=high] .table tbody tr,[data-contrast=high] .table tbody td{background:var(--hc-surface);color:var(--hc-ink)}
+[data-contrast=high] .table tbody tr:nth-child(even),[data-contrast=high] .table tbody tr:nth-child(even) td{background:var(--hc-alt);color:var(--hc-ink)}
+[data-contrast=high] label,[data-contrast=high] .hint,[data-contrast=high] .footerNote,[data-contrast=high] .mutedText,[data-contrast=high] .empty,[data-contrast=high] .empty strong,[data-contrast=high] .empty h3{color:var(--hc-ink)}
+[data-contrast=high] a,[data-contrast=high] .linkButton,[data-contrast=high] .textButton{color:var(--hc-link);text-decoration:underline}
+[data-contrast=high] .primary,[data-contrast=high] nav button.active,[data-contrast=high] .captureButton{background:#b30a22;color:#fff}
+[data-contrast=high] .kpi.green .kpiIcon{background:#006b3e;color:#fff}
+[data-contrast=high] .kpi.yellow .kpiIcon{background:#f8d124;color:#000}
+[data-contrast=high] .online{color:var(--hc-ink)}
+[data-contrast=high] .vehiclePlate{background:#000;color:#fff;border:1px solid #fff}
+[data-contrast=high] .vehicleState{background:#fff;color:#000;border:1px solid #000}
+[data-contrast=high] .bay.operation .vehicleState{background:#ffdb00;color:#000;border-color:#ffdb00}
+[data-contrast=high] .bay.bad .vehicleState{background:#b30a22;color:#fff;border-color:#fff}
+[data-contrast=high] .yardScene{--parking-line:#ffdb00;border-color:#cbd3dc}
+[data-contrast=high] .yardScene .empty,[data-contrast=high] .yardScene .empty strong,[data-contrast=high] .yardScene .empty h3{color:#fff}
+[data-contrast=high] :focus-visible{outline:3px solid var(--hc-link);outline-offset:4px}
+[data-contrast=high] .yardScene :focus-visible{outline-color:#fff}
+[data-contrast=high] .inspectionFooter{background:var(--hc-surface)}
+.panelBody .contrastOption{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px}
+[data-contrast=high] #toast{background:var(--hc-surface);color:var(--hc-ink);border:2px solid var(--border);box-shadow:none}
