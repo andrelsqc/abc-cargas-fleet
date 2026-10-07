@@ -1,5 +1,6 @@
 import {installBackup} from './backup.js';
 import {installCleanup} from './cleanup.js';
+import {installRestore} from './restore.js';
 import 'dotenv/config';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -150,6 +151,7 @@ app.get('/api/users',auth,role('admin','manager'),async(req,res)=>{const {rows}=
 installReservations(app,auth);
 installBackup(app,{pool,auth,role});
 installCleanup(app,{pool,auth,role});
+installRestore(app,{pool,auth,role});
 app.use(express.static(path.join(__dirname,'../public'),{setHeaders(res,file){if(/\.(html|js|css)$/.test(file))res.set('Cache-Control','no-cache')}}));
 app.use((req,res)=>{ if(req.method==='GET' && req.accepts('html')) return res.sendFile(path.join(__dirname,'../public/index.html')); res.status(404).json({error:'Rota não encontrada'}); });
 
