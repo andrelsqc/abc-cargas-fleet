@@ -147,9 +147,9 @@ app.put('/api/users/:id/active',auth,role('admin'),async(req,res)=>{
 app.get('/api/users',auth,role('admin','manager'),async(req,res)=>{const {rows}=await pool.query(`SELECT id,name,email,role,active,created_at FROM users WHERE organization_id=$1 ORDER BY name`,[req.user.org]);res.json({users:rows});});
 
 installReservations(app,auth);
+installBackup(app,{pool,auth,role});
 app.use(express.static(path.join(__dirname,'../public'),{setHeaders(res,file){if(/\.(html|js|css)$/.test(file))res.set('Cache-Control','no-cache')}}));
 app.use((req,res)=>{ if(req.method==='GET' && req.accepts('html')) return res.sendFile(path.join(__dirname,'../public/index.html')); res.status(404).json({error:'Rota não encontrada'}); });
 
 app.use((err,_req,res,_next)=>{if(err instanceof InputError)return res.status(err.status).json({error:err.message});if(['23503','23001'].includes(err.code))return res.status(409).json({error:'Este cadastro possui reservas ou vistorias e não pode ser excluído. Preserve o histórico.'});if(err.code==='23505')return res.status(409).json({error:'Placa ou registro já cadastrado.'});if(err.type==='entity.too.large')return res.status(413).json({error:'Dados muito grandes. Reduza as imagens.'});console.error(err);res.status(500).json({error:'Não foi possível concluir a operação. Tente novamente.'});});
-installBackup(app,{pool,auth,role});
 app.listen(PORT,()=>console.log(`ABC Cargas SaaS: http://localhost:${PORT}`));
