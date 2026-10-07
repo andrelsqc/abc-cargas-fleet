@@ -12,3 +12,39 @@
 .angleGuide{height:155px;padding:0;background:#fff;border:1px solid #edf0f3;border-radius:10px;overflow:hidden}.vehicleAngleArtwork{width:100%;height:100%;background-image:url('/assets/inspection-guides.png');background-size:300% 200%;background-repeat:no-repeat}.vehicleCard:has(.badge.muted){opacity:.8}
 
 .angleGuide{height:auto;aspect-ratio:1}.vehicleAngleArtwork{aspect-ratio:1}
+/* Pátio claro, marcação de estacionamento e centro reservado ao veículo. */
+:root{--yard-surface:#f5f7fa;--parking-line:#dab218}
+.yardScene{background:var(--yard-surface);background-image:none;border:1px solid var(--border);box-shadow:none;padding:25px 22px 35px;min-height:362px}
+.yardGrid{grid-template-columns:repeat(auto-fill,minmax(142px,1fr));gap:42px 0}
+.bay{height:222px;border:0;border-top:5px double var(--parking-line);border-left:5px double var(--parking-line);padding:0 5px 8px;display:grid;grid-template-rows:150px 30px 24px;justify-items:center;align-items:center;position:relative;min-width:0}
+.bay::after{content:'';position:absolute;right:-3px;top:-5px;bottom:0;border-right:5px double var(--parking-line);pointer-events:none}
+.bay:hover{background:#1479eb0a}
+.bay .carCanvas{width:132px;height:132px;align-self:center;justify-self:center;filter:drop-shadow(0 3px 3px #172c4030)}
+.bay .vehicleState{margin-top:0;align-self:center}
+.bay .vehiclePlate{box-shadow:0 2px 5px #172c4020}
+.bay:focus-visible{outline:3px solid var(--blue);outline-offset:4px;z-index:1}
+#themeSelect{max-width:420px;width:100%;display:block;margin-top:9px}
+:root[data-theme=dark]{color-scheme:dark;color:#e5edf7;background:#101824;--muted:#a0b2c9;--border:#344559;--shadow:0 3px 12px #0002;--yard-surface:#1b2939;--parking-line:#ebc640}
+[data-theme=dark] body{background:#101824;color:#e5edf7}
+[data-theme=dark] .sidebar{background:linear-gradient(140deg,#192536,#132030)}
+[data-theme=dark] .header{background:#182536f5}
+[data-theme=dark] .panel,[data-theme=dark] .kpi,[data-theme=dark] .vehicleCard,[data-theme=dark] .yardCard,[data-theme=dark] .modal,[data-theme=dark] .authCard{background:#1c293b;color:#e5edf7}
+[data-theme=dark] .panelHeader,[data-theme=dark] .event,[data-theme=dark] .modal header{border-color:var(--border)}
+[data-theme=dark] .sideBottom,[data-theme=dark] .metricBox,[data-theme=dark] .searchWrap,[data-theme=dark] .secondary,[data-theme=dark] .table thead,[data-theme=dark] .table th{background:#26374d;color:#dbe7f5}
+[data-theme=dark] input,[data-theme=dark] select,[data-theme=dark] textarea{background:#132031;color:#e5edf7;border-color:#465b74}
+[data-theme=dark] .searchWrap input{background:transparent;color:#e5edf7}
+[data-theme=dark] input::placeholder,[data-theme=dark] textarea::placeholder{color:#a0b2c9}
+[data-theme=dark] nav button:hover:not(.active),[data-theme=dark] .secondary:hover,[data-theme=dark] .iconButton:hover,[data-theme=dark] .table tr:hover{background:#31445c}
+[data-theme=dark] .brandLogo{background-color:white;border-radius:5px}
+[data-theme=dark] .hint,[data-theme=dark] .footerNote,[data-theme=dark] .mutedText,[data-theme=dark] .empty{color:var(--muted)}
+[data-theme=dark] .photoSlot,[data-theme=dark] .inspectionPhoto,[data-theme=dark] .photoGuide,[data-theme=dark] .reservationReminder,[data-theme=dark] .notice{background:#26374d;color:#e5edf7;border-color:var(--border)}
+[data-theme=dark] .bay:hover{background:#ffffff08}
+@media(max-width:600px){.yardScene{padding:20px 12px 30px}.yardGrid{grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:30px 0}}
+[data-theme=dark] .inspectionFooter{background:#1c293b}
+[data-theme=dark] .table td{border-color:var(--border)}
+[data-theme=dark] .authGate{background:#101824}
+[data-theme=dark] label,[data-theme=dark] .empty strong,[data-theme=dark] .empty h3{color:#d5e1f1}
+[data-theme=dark] .table tbody tr,[data-theme=dark] .table tbody td{background:#1c293b;color:#e5edf7}
+[data-theme=dark] .table tbody tr:nth-child(even),[data-theme=dark] .table tbody tr:nth-child(even) td{background:#223248}
+[data-theme=dark] .muted,[data-theme=dark] .smallButton{color:#c4d7ee}
+[data-theme=dark] .smallButton{background:#31445c}
